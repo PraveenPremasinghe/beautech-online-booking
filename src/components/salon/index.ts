@@ -1,0 +1,14 @@
+export { SalonProfilePage } from "./salon-profile-page";
+export { SalonProfileSkeleton } from "./salon-profile-skeleton";
+export { SalonCover } from "./salon-cover";
+export { SalonDetailsHeader } from "./salon-details-header";
+export { SalonBookingCard } from "./salon-booking-card";
+export { SalonServicesByCategory } from "./salon-services-by-category";
+export { SalonTeamSection } from "./salon-team-section";
+export { SalonAboutSection } from "./salon-about-section";
+export { SalonOpeningHoursSection } from "./salon-opening-hours-section";
+export { SalonBranchesSection } from "./salon-branches-section";
+export { SalonOpeningHours } from "./salon-opening-hours";
+export { SalonReviewsSection } from "./salon-reviews-section";
+export { SalonStickyBookBar } from "./salon-sticky-book-bar";
+export { ReviewCard } from "./review-card";
