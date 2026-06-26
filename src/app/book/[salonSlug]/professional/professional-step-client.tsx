@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
@@ -12,6 +13,8 @@ import {
   getNextStepRoute,
   getPrevStepRoute,
 } from "@/features/booking/routes";
+import { fetchProfessionals } from "@/lib/api/professionals";
+import { getClientId } from "@/lib/tenant";
 import {
   useBookingNavigation,
   useBookingStore,
@@ -34,14 +37,30 @@ export function ProfessionalStepClient({ salonSlug }: ProfessionalStepClientProp
   const branchId = useBookingStore((s) => s.branchId);
   const serviceIds = useBookingStore((s) => s.serviceIds);
   const professionalId = useBookingStore((s) => s.professionalId);
-  const professionals = useBookingStore(useShallow(selectBranchProfessionals));
+  const setProfessionals = useBookingStore((s) => s.setProfessionals);
+  const professionals = useBookingStore((s) => s.professionals);
   const selectedServices = useBookingStore(useShallow(selectSelectedServices));
+  const branchProfessionals = useBookingStore(useShallow(selectBranchProfessionals));
   const availableProfessionals = useBookingStore(
     useShallow(selectAvailableProfessionals),
   );
   const setProfessional = useBookingStore((s) => s.setProfessional);
 
   const { canProceed, validateCurrentStep } = useBookingNavigation();
+
+  const { isLoading } = useQuery({
+    queryKey: ["professionals", branchId, getClientId()],
+    queryFn: async () => {
+      const data = await fetchProfessionals(branchId!);
+      setProfessionals(data);
+      if (data.length === 1 && !professionalId) {
+        setProfessional(data[0].id);
+      }
+      return data;
+    },
+    enabled: Boolean(branchId && getClientId()),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (!branchId) {
@@ -69,7 +88,7 @@ export function ProfessionalStepClient({ salonSlug }: ProfessionalStepClientProp
     if (nextRoute) router.push(nextRoute);
   }
 
-  if (!branchId || serviceIds.length === 0) {
+  if (!branchId || serviceIds.length === 0 || isLoading) {
     return <BookingRouteSkeleton />;
   }
 
@@ -80,10 +99,10 @@ export function ProfessionalStepClient({ salonSlug }: ProfessionalStepClientProp
       summary={summary}
       onBack={handleBack}
       onContinue={handleContinue}
-      continueDisabled={!canProceed()}
+      continueDisabled={!canProceed() || professionals.length === 0}
     >
       <ProfessionalStep
-        professionals={professionals}
+        professionals={availableProfessionals.length > 0 ? availableProfessionals : branchProfessionals}
         selectedServices={selectedServices}
         selectedProfessionalId={professionalId}
         availableCount={availableProfessionals.length}

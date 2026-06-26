@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Beautech Online Booking
 
-## Getting Started
+Next.js booking app wired to the Beautech appointment-service APIs (same backend as the Angular `beautech-appointment-v2-frontend` project).
 
-First, run the development server:
+## Getting started
+
+1. Copy environment variables:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install and run:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Open with a tenant query param (required for API calls):
 
-## Learn More
+```
+http://localhost:3000/?client=demo
+```
 
-To learn more about Next.js, take a look at the following resources:
+Booking flow:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+http://localhost:3000/book/beautech-studio/branch?client=demo
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment variables
 
-## Deploy on Vercel
+See [`.env.local.example`](.env.local.example). Key values:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_BASE_URL` | Appointment API host |
+| `NEXT_PUBLIC_BOOKING_GATEWAY_URL` | Booking gateway (Google auth state) |
+| `NEXT_PUBLIC_KEYCLOAK_*` | Keycloak Google login |
+| `ENCRYPTION_KEY` | Encrypted booking draft (`_a`) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API integration
+
+- All booking data is fetched per step from `appointment-service` (branches, treatments, employees, slots, appointments).
+- Tenant is passed as `?client=` and sent as `X-Client-Id` on every request.
+- Google sign-in uses Keycloak + booking-gateway (`/public/booking-auth/state`).
+- Profile page: `/profile?client=demo` lists customer appointments.
+
+See [`src/doc/NEXTJS_MIGRATION.md`](src/doc/NEXTJS_MIGRATION.md) for the full API reference.
+
+## Scripts
+
+```bash
+npm run dev    # development server
+npm run build  # production build
+npm run start  # production server
+npm run lint   # ESLint
+```

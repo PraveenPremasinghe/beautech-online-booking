@@ -14,12 +14,13 @@ import {
   getNextStepRoute,
   getPrevStepRoute,
 } from "@/features/booking/routes";
+import { fetchCurrentCustomer } from "@/lib/api/customers";
+import { loginWithGoogle } from "@/lib/booking-auth";
+import { saveBookingDraft } from "@/lib/booking-state";
+import { getEmailFromToken, isLoggedIn } from "@/lib/keycloak";
+import { getClientId } from "@/lib/tenant";
+import { clientDetailsFromEmail } from "@/lib/validations/client-details";
 import {
-  toClientDetails,
-  type ClientDetailsFormValues,
-} from "@/lib/validations/client-details";
-import {
-  useBookingNavigation,
   useBookingStore,
   useBookingSummary,
 } from "@/store";
@@ -32,6 +33,7 @@ export function DetailsStepClient({ salonSlug }: DetailsStepClientProps) {
   const router = useRouter();
   const summary = useBookingSummary();
   const [isFormValid, setIsFormValid] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const branchId = useBookingStore((s) => s.branchId);
   const serviceIds = useBookingStore((s) => s.serviceIds);
@@ -40,8 +42,7 @@ export function DetailsStepClient({ salonSlug }: DetailsStepClientProps) {
   const timeSlotId = useBookingStore((s) => s.timeSlotId);
   const clientDetails = useBookingStore((s) => s.clientDetails);
   const setClientDetails = useBookingStore((s) => s.setClientDetails);
-
-  const { validateCurrentStep } = useBookingNavigation();
+  const setCustomerId = useBookingStore((s) => s.setCustomerId);
 
   const handleValidChange = useCallback((valid: boolean) => {
     setIsFormValid(valid);
@@ -73,17 +74,49 @@ export function DetailsStepClient({ salonSlug }: DetailsStepClientProps) {
     router,
   ]);
 
-  function handleFormSubmit(values: ClientDetailsFormValues) {
-    setClientDetails(toClientDetails(values));
+  async function proceedAfterAuth(email: string) {
+    setClientDetails(clientDetailsFromEmail(email));
 
-    const result = validateCurrentStep();
-    if (!result.valid) {
-      toast.error(result.errors[0] ?? "Complete your contact details");
-      return;
+    const loggedIn = await isLoggedIn();
+    if (loggedIn) {
+      try {
+        const customer = await fetchCurrentCustomer();
+        if (customer.id != null) {
+          setCustomerId(customer.id);
+          const nextRoute = getNextStepRoute("details", salonSlug);
+          if (nextRoute) router.push(nextRoute);
+          return;
+        }
+      } catch {
+        // fall through to Google login
+      }
     }
 
-    const nextRoute = getNextStepRoute("details", salonSlug);
-    if (nextRoute) router.push(nextRoute);
+    saveBookingDraft({ returnTo: "summary", tenant: getClientId() ?? undefined });
+    await loginWithGoogle(getClientId() ?? undefined);
+  }
+
+  async function handleEmailContinue(email: string) {
+    setIsSubmitting(true);
+    try {
+      await proceedAfterAuth(email);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to continue");
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleContinue() {
+    setIsSubmitting(true);
+    try {
+      const email = (await getEmailFromToken()) ?? "guest@gmail.com";
+      setClientDetails(clientDetailsFromEmail(email));
+      saveBookingDraft({ returnTo: "summary", tenant: getClientId() ?? undefined });
+      await loginWithGoogle(getClientId() ?? undefined);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to start Google sign in");
+      setIsSubmitting(false);
+    }
   }
 
   function handleBack() {
@@ -105,15 +138,18 @@ export function DetailsStepClient({ salonSlug }: DetailsStepClientProps) {
   return (
     <BookingShell
       currentStep="details"
-      stepTitle="Your details"
+      stepTitle="Log in or sign up to book"
       summary={summary}
       onBack={handleBack}
       onContinue={handleContinue}
-      continueDisabled={!isFormValid}
+      continueDisabled={!isFormValid || isSubmitting}
+      isLoading={isSubmitting}
     >
       <DetailsStep
-        defaultValues={clientDetails}
-        onSubmit={handleFormSubmit}
+        defaultEmail={clientDetails?.email}
+        onEmailContinue={handleEmailContinue}
+        onGoogleContinue={handleGoogleContinue}
+        onClose={handleBack}
         onValidChange={handleValidChange}
       />
     </BookingShell>

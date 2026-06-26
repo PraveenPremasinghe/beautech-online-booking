@@ -2,8 +2,8 @@ import { MapPinIcon } from "@heroicons/react/24/outline";
 
 import { BranchCard } from "@/components/booking/branch-card";
 import { sortBranchesForDisplay } from "@/lib/branch-utils";
+import { getTenantOpeningHours } from "@/lib/tenant-config";
 import { isOpenNow } from "@/lib/salon-utils";
-import { mockOpeningHours } from "@/lib/mock-booking-data";
 import type { Branch } from "@/types/booking";
 
 interface BranchStepProps {
@@ -18,7 +18,7 @@ export function BranchStep({
   onSelectBranch,
 }: BranchStepProps) {
   const sorted = sortBranchesForDisplay(branches);
-  const salonOpen = isOpenNow(mockOpeningHours);
+  const salonOpen = isOpenNow(getTenantOpeningHours());
 
   if (branches.length === 0) {
     return (

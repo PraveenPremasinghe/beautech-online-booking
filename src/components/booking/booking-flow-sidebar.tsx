@@ -43,7 +43,7 @@ export function BookingFlowSidebar({
   isLoading = false,
   className,
 }: BookingFlowSidebarProps) {
-  const salon = useBookingStore((s) => s.catalog?.salon);
+  const salon = useBookingStore((s) => s.salon);
   const displayName = summary?.branch?.name ?? salon?.name ?? summary?.salon.name ?? "Your appointment";
 
   const address = summary?.branch

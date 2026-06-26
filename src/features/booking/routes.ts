@@ -1,4 +1,5 @@
 import type { BookingStep } from "@/types/booking";
+import { withClientQuery } from "@/lib/tenant";
 
 /** Per-step booking URLs: /book/[salonSlug]/[step] */
 export const bookingStepRoutes = {
@@ -11,7 +12,7 @@ export const bookingStepRoutes = {
 } as const satisfies Record<BookingStep, (salonSlug: string) => string>;
 
 export function getBookingStepRoute(step: BookingStep, salonSlug: string): string {
-  return bookingStepRoutes[step](salonSlug);
+  return withClientQuery(bookingStepRoutes[step](salonSlug));
 }
 
 export function getNextStepRoute(

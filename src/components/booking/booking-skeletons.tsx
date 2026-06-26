@@ -154,17 +154,23 @@ function DatetimeStepSkeleton() {
 
 function DetailsStepSkeleton() {
   return (
-    <div className="space-y-5" aria-busy="true" aria-label="Loading form">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-11 w-full rounded-xl" />
-        </div>
-      ))}
+    <div
+      className="mx-auto w-full max-w-md space-y-6 rounded-2xl border border-border/70 bg-card p-6 shadow-lg sm:p-8"
+      aria-busy="true"
+      aria-label="Loading sign in"
+    >
       <div className="space-y-2">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-7 w-56" />
+        <Skeleton className="h-4 w-full max-w-xs" />
       </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-4 w-48" />
+      </div>
+      <Skeleton className="h-12 w-full rounded-full" />
+      <Skeleton className="h-px w-full" />
+      <Skeleton className="h-12 w-full rounded-full" />
     </div>
   );
 }
@@ -198,7 +204,7 @@ function BookingStepContentSkeleton({ variant }: { variant: BookingSkeletonVaria
     case "datetime":
       return <DatetimeStepSkeleton />;
     case "details":
-      return <DetailsStepSkeleton />;
+      return <div className="flex justify-center py-2 sm:py-6"><DetailsStepSkeleton /></div>;
     case "summary":
       return <SummaryStepSkeleton />;
     default:

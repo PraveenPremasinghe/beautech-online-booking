@@ -2,10 +2,10 @@ import { addMinutes, parse } from "date-fns";
 
 import { formatCurrency, formatDuration } from "@/lib/format";
 import type {
-  BookingCatalog,
   BookingDraft,
   BookingSummary,
   BookingSummaryLineItem,
+  Branch,
   ClientDetails,
   CurrencyCode,
   Professional,
@@ -79,18 +79,24 @@ export function buildSummaryLineItems(services: Service[]): BookingSummaryLineIt
 
 export interface BuildBookingSummaryOptions {
   draft: BookingDraft;
-  catalog: BookingCatalog;
+  salon: Pick<import("@/types/booking").Salon, "id" | "slug" | "name" | "currency">;
+  branches: Branch[];
+  services: Service[];
+  professionals: Professional[];
+  selectedTimeSlot: TimeSlot | null;
   taxRate?: number;
 }
 
-/** Resolve a full `BookingSummary` from an in-progress draft + catalog */
+/** Resolve a full `BookingSummary` from an in-progress draft + loaded entities */
 export function buildBookingSummary({
   draft,
-  catalog,
+  salon,
+  branches,
+  services,
+  professionals,
+  selectedTimeSlot,
   taxRate = 0,
 }: BuildBookingSummaryOptions): BookingSummary {
-  const { salon, branches, services, professionals, timeSlots } = catalog;
-
   const selectedServices = draft.serviceIds
     .map((id) => services.find((s) => s.id === id))
     .filter((s): s is Service => Boolean(s));
@@ -103,9 +109,22 @@ export function buildBookingSummary({
   const professional = anyProfessional
     ? undefined
     : resolveProfessional(draft, professionals);
-  const timeSlot = draft.timeSlotId
-    ? timeSlots.find((t) => t.id === draft.timeSlotId)
-    : undefined;
+  const timeSlot =
+    selectedTimeSlot ??
+    (draft.timeSlotId && draft.date
+      ? {
+          id: draft.timeSlotId,
+          branchId: draft.branchId ?? "",
+          professionalId:
+            draft.professionalId === "any"
+              ? ""
+              : (draft.professionalId ?? ""),
+          date: draft.date,
+          startTime: "",
+          endTime: "",
+          isAvailable: true,
+        }
+      : undefined);
 
   const lineItems = buildSummaryLineItems(selectedServices);
   const totalDurationMinutes = calculateTotalDuration(selectedServices);

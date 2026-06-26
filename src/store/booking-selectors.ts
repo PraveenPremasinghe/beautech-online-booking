@@ -1,14 +1,15 @@
 import { buildBookingSummary } from "@/lib/booking-utils";
 import type {
   AppointmentConfirmation,
-  BookingCatalog,
   BookingDraft,
   BookingStep,
   BookingSummary,
   Branch,
   Professional,
   ProfessionalSelection,
+  Salon,
   Service,
+  ServiceCategory,
   TimeSlot,
 } from "@/types/booking";
 
@@ -16,12 +17,17 @@ import type { BookingValidationState } from "./booking-validation";
 import {
   EMPTY_PROFESSIONALS,
   EMPTY_SERVICES,
-  EMPTY_TIME_SLOTS,
 } from "./empty-collections";
 
 /** Booking store state shape (for selectors) */
 export interface BookingStoreState extends BookingValidationState {
-  catalog: BookingCatalog | null;
+  salon: Salon | null;
+  branches: Branch[];
+  categories: ServiceCategory[];
+  services: Service[];
+  professionals: Professional[];
+  selectedTimeSlot: TimeSlot | null;
+  customerId: number | null;
   currentStep: BookingStep;
   confirmation: AppointmentConfirmation | null;
   taxRate: number;
@@ -47,38 +53,34 @@ export function selectDraft(state: BookingStoreState): BookingDraft | null {
 // ─── Resolved entities ───────────────────────────────────────────────────────
 
 export function selectSalon(state: BookingStoreState) {
-  return state.catalog?.salon ?? null;
+  return state.salon;
 }
 
 export function selectSelectedBranch(state: BookingStoreState): Branch | null {
-  if (!state.catalog || !state.branchId) return null;
-  return state.catalog.branches.find((b) => b.id === state.branchId) ?? null;
+  if (!state.branchId) return null;
+  return state.branches.find((b) => b.id === state.branchId) ?? null;
 }
 
 export function selectSelectedServices(state: BookingStoreState): Service[] {
-  if (!state.catalog || state.serviceIds.length === 0) return EMPTY_SERVICES;
+  if (state.serviceIds.length === 0) return EMPTY_SERVICES;
   return state.serviceIds
-    .map((id) => state.catalog!.services.find((s) => s.id === id))
+    .map((id) => state.services.find((s) => s.id === id))
     .filter((s): s is Service => Boolean(s));
 }
 
 export function selectSelectedProfessional(
   state: BookingStoreState,
 ): Professional | null {
-  if (!state.catalog || !state.professionalId || state.professionalId === "any") {
+  if (!state.professionalId || state.professionalId === "any") {
     return null;
   }
   return (
-    state.catalog.professionals.find((p) => p.id === state.professionalId) ??
-    null
+    state.professionals.find((p) => p.id === state.professionalId) ?? null
   );
 }
 
 export function selectSelectedTimeSlot(state: BookingStoreState): TimeSlot | null {
-  if (!state.catalog || !state.timeSlotId) return null;
-  return (
-    state.catalog.timeSlots.find((t) => t.id === state.timeSlotId) ?? null
-  );
+  return state.selectedTimeSlot;
 }
 
 export function selectIsAnyProfessional(state: BookingStoreState): boolean {
@@ -89,11 +91,15 @@ export function selectIsAnyProfessional(state: BookingStoreState): boolean {
 
 export function selectBookingSummary(state: BookingStoreState): BookingSummary | null {
   const draft = selectDraft(state);
-  if (!draft || !state.catalog) return null;
+  if (!draft || !state.salon) return null;
 
   return buildBookingSummary({
     draft,
-    catalog: state.catalog,
+    salon: state.salon,
+    branches: state.branches,
+    services: state.services,
+    professionals: state.professionals,
+    selectedTimeSlot: state.selectedTimeSlot,
     taxRate: state.taxRate,
   });
 }
@@ -104,43 +110,27 @@ export function selectHasPartialSummary(state: BookingStoreState): boolean {
 
 // ─── Available options (filtered by prior selections) ────────────────────────
 
-/** All available professionals at the selected branch */
 export function selectBranchProfessionals(
   state: BookingStoreState,
 ): Professional[] {
-  if (!state.catalog || !state.branchId) return EMPTY_PROFESSIONALS;
+  if (!state.branchId) return EMPTY_PROFESSIONALS;
 
-  return state.catalog.professionals.filter(
+  return state.professionals.filter(
     (pro) => pro.isAvailable && pro.branchIds.includes(state.branchId!),
   );
 }
 
-/** Professionals who can perform every selected service */
 export function selectAvailableProfessionals(
   state: BookingStoreState,
 ): Professional[] {
-  if (!state.catalog || !state.branchId || state.serviceIds.length === 0) {
+  if (!state.branchId || state.serviceIds.length === 0) {
     return EMPTY_PROFESSIONALS;
   }
 
-  return selectBranchProfessionals(state).filter((pro) =>
-    state.serviceIds.every((id) => pro.serviceIds.includes(id)),
-  );
-}
+  const branchPros = selectBranchProfessionals(state);
+  if (branchPros.length === 0) return state.professionals;
 
-export function selectAvailableTimeSlots(state: BookingStoreState): TimeSlot[] {
-  if (!state.catalog || !state.branchId || !state.date) return EMPTY_TIME_SLOTS;
-
-  const professionalId =
-    state.professionalId === "any" ? undefined : state.professionalId;
-
-  return state.catalog.timeSlots.filter((slot) => {
-    if (slot.branchId !== state.branchId) return false;
-    if (slot.date !== state.date) return false;
-    if (!slot.isAvailable) return false;
-    if (professionalId && slot.professionalId !== professionalId) return false;
-    return true;
-  });
+  return branchPros;
 }
 
 // ─── Validation slice ────────────────────────────────────────────────────────
@@ -156,6 +146,7 @@ export function selectValidationState(
     date: state.date,
     timeSlotId: state.timeSlotId,
     clientDetails: state.clientDetails,
+    customerId: state.customerId,
   };
 }
 

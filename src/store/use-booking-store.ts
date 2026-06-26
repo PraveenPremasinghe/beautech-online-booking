@@ -4,12 +4,18 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
 import { BOOKING_STEPS, getBookingStepIndex } from "@/features/booking/constants";
+import { getTenantSalon } from "@/lib/tenant-config";
 import type {
   AppointmentConfirmation,
-  BookingCatalog,
   BookingStep,
+  Branch,
   ClientDetails,
+  Professional,
   ProfessionalSelection,
+  Salon,
+  Service,
+  ServiceCategory,
+  TimeSlot,
 } from "@/types/booking";
 
 import {
@@ -23,29 +29,29 @@ import {
   type StepValidationResult,
 } from "./booking-validation";
 
-// ─── Store types ─────────────────────────────────────────────────────────────
-
 interface BookingStoreActions {
-  /** Load catalog and start/resume a booking session */
   initBooking: (
     salonSlug: string,
-    catalog: BookingCatalog,
+    clientId: string,
     options?: InitBookingOptions,
   ) => void;
   setStep: (step: BookingStep) => void;
   nextStep: () => StepValidationResult;
   prevStep: () => void;
+  setBranches: (branches: Branch[]) => void;
+  setCategories: (categories: ServiceCategory[]) => void;
+  setCatalogServices: (services: Service[]) => void;
+  setProfessionals: (professionals: Professional[]) => void;
   setBranch: (branchId: string) => void;
   toggleService: (serviceId: string) => void;
-  setServices: (serviceIds: string[]) => void;
+  setServiceIds: (serviceIds: string[]) => void;
   setProfessional: (professionalId: ProfessionalSelection) => void;
   setDate: (date: string) => void;
-  setTimeSlot: (timeSlotId: string) => void;
+  setTimeSlot: (slot: TimeSlot) => void;
   setClientDetails: (details: ClientDetails) => void;
+  setCustomerId: (customerId: number | null) => void;
   setConfirmation: (confirmation: AppointmentConfirmation | null) => void;
-  /** Clear all selections and return to branch step */
   resetBooking: () => void;
-  /** Clear selections from a step onward (e.g. changing branch clears downstream) */
   resetFromStep: (step: BookingStep) => void;
   validateCurrentStep: () => StepValidationResult;
   canProceed: (step?: BookingStep) => boolean;
@@ -54,7 +60,13 @@ interface BookingStoreActions {
 export type BookingStore = BookingStoreState & BookingStoreActions;
 
 const initialState: BookingStoreState = {
-  catalog: null,
+  salon: null,
+  branches: [],
+  categories: [],
+  services: [],
+  professionals: [],
+  selectedTimeSlot: null,
+  customerId: null,
   currentStep: "branch",
   salonSlug: null,
   branchId: null,
@@ -76,23 +88,8 @@ function toValidationState(state: BookingStoreState): BookingValidationState {
     date: state.date,
     timeSlotId: state.timeSlotId,
     clientDetails: state.clientDetails,
+    customerId: state.customerId,
   };
-}
-
-function resolveServiceIdsFromOptions(
-  catalog: BookingCatalog,
-  options: InitBookingOptions,
-): string[] {
-  if (!options.serviceIds?.length) return [];
-
-  return options.serviceIds
-    .map((ref) => {
-      const byId = catalog.services.find((s) => s.id === ref);
-      if (byId) return byId.id;
-      const bySlug = catalog.services.find((s) => s.slug === ref);
-      return bySlug?.id;
-    })
-    .filter((id): id is string => Boolean(id));
 }
 
 function cascadeAfterBranchChange(
@@ -102,13 +99,12 @@ function cascadeAfterBranchChange(
   const patch: Partial<BookingStoreState> = { branchId };
 
   if (state.professionalId && state.professionalId !== "any") {
-    const pro = state.catalog?.professionals.find(
-      (p) => p.id === state.professionalId,
-    );
+    const pro = state.professionals.find((p) => p.id === state.professionalId);
     if (!pro?.branchIds.includes(branchId)) {
       patch.professionalId = null;
       patch.date = null;
       patch.timeSlotId = null;
+      patch.selectedTimeSlot = null;
     }
   }
 
@@ -119,21 +115,12 @@ function cascadeAfterServicesChange(
   state: BookingStoreState,
   serviceIds: string[],
 ): Partial<BookingStoreState> {
-  const patch: Partial<BookingStoreState> = { serviceIds };
-
-  if (state.professionalId && state.professionalId !== "any") {
-    const pro = state.catalog?.professionals.find(
-      (p) => p.id === state.professionalId,
-    );
-    const canPerform = pro?.serviceIds.every((id) => serviceIds.includes(id));
-    if (!canPerform) {
-      patch.professionalId = null;
-      patch.date = null;
-      patch.timeSlotId = null;
-    }
-  }
-
-  return patch;
+  return {
+    serviceIds,
+    date: null,
+    timeSlotId: null,
+    selectedTimeSlot: null,
+  };
 }
 
 export const useBookingStore = create<BookingStore>()(
@@ -141,26 +128,33 @@ export const useBookingStore = create<BookingStore>()(
     (set, get) => ({
       ...initialState,
 
-      initBooking: (salonSlug, catalog, options = {}) => {
-        const serviceIds = resolveServiceIdsFromOptions(catalog, options);
-        const branchId = options.branchId ?? null;
+      initBooking: (salonSlug, clientId, options = {}) => {
+        const salon: Salon = getTenantSalon(clientId);
 
         set(
           {
-            catalog,
+            salon,
             salonSlug,
-            branchId,
-            serviceIds,
+            branchId: options.branchId ?? null,
+            serviceIds: options.serviceIds ?? [],
             professionalId: options.professionalId ?? null,
-            currentStep: options.step ?? inferInitialStep({
-              branchId,
-              serviceIds,
-              professionalId: options.professionalId ?? null,
-            }),
+            currentStep:
+              options.step ??
+              inferInitialStep({
+                branchId: options.branchId ?? null,
+                serviceIds: options.serviceIds ?? [],
+                professionalId: options.professionalId ?? null,
+              }),
             date: null,
             timeSlotId: null,
+            selectedTimeSlot: null,
             clientDetails: null,
+            customerId: null,
             confirmation: null,
+            branches: [],
+            categories: [],
+            services: [],
+            professionals: [],
           },
           false,
           "initBooking",
@@ -195,6 +189,17 @@ export const useBookingStore = create<BookingStore>()(
         }
       },
 
+      setBranches: (branches) => set({ branches }, false, "setBranches"),
+
+      setCategories: (categories) =>
+        set({ categories }, false, "setCategories"),
+
+      setCatalogServices: (services) =>
+        set({ services }, false, "setCatalogServices"),
+
+      setProfessionals: (professionals) =>
+        set({ professionals }, false, "setProfessionals"),
+
       setBranch: (branchId) => {
         set(
           (state) => cascadeAfterBranchChange(state, branchId),
@@ -215,32 +220,41 @@ export const useBookingStore = create<BookingStore>()(
         );
       },
 
-      setServices: (serviceIds) => {
+      setServiceIds: (serviceIds) => {
         set(
           (state) => cascadeAfterServicesChange(state, serviceIds),
           false,
-          "setServices",
+          "setServiceIds",
         );
       },
 
       setProfessional: (professionalId) => {
         set(
-          { professionalId, date: null, timeSlotId: null },
+          {
+            professionalId,
+            date: null,
+            timeSlotId: null,
+            selectedTimeSlot: null,
+          },
           false,
           "setProfessional",
         );
       },
 
       setDate: (date) => {
-        set({ date, timeSlotId: null }, false, "setDate");
+        set(
+          { date, timeSlotId: null, selectedTimeSlot: null },
+          false,
+          "setDate",
+        );
       },
 
-      setTimeSlot: (timeSlotId) => {
-        const slot = get().catalog?.timeSlots.find((t) => t.id === timeSlotId);
+      setTimeSlot: (slot) => {
         set(
           {
-            timeSlotId,
-            date: slot?.date ?? get().date,
+            timeSlotId: slot.id,
+            date: slot.date,
+            selectedTimeSlot: slot,
           },
           false,
           "setTimeSlot",
@@ -251,17 +265,25 @@ export const useBookingStore = create<BookingStore>()(
         set({ clientDetails: details }, false, "setClientDetails");
       },
 
+      setCustomerId: (customerId) => {
+        set({ customerId }, false, "setCustomerId");
+      },
+
       setConfirmation: (confirmation) => {
         set({ confirmation }, false, "setConfirmation");
       },
 
       resetBooking: () => {
-        const { catalog, salonSlug } = get();
-        if (!catalog || !salonSlug) {
+        const { salonSlug } = get();
+        const clientId =
+          typeof window !== "undefined"
+            ? sessionStorage.getItem("booking_client_id")
+            : null;
+        if (!salonSlug || !clientId) {
           set(initialState, false, "resetBooking");
           return;
         }
-        get().initBooking(salonSlug, catalog);
+        get().initBooking(salonSlug, clientId);
       },
 
       resetFromStep: (step) => {
@@ -276,6 +298,7 @@ export const useBookingStore = create<BookingStore>()(
         if (stepIndex <= getBookingStepIndex("datetime")) {
           patch.date = null;
           patch.timeSlotId = null;
+          patch.selectedTimeSlot = null;
         }
         if (stepIndex <= getBookingStepIndex("details")) {
           patch.clientDetails = null;

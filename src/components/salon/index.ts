@@ -1,4 +1,5 @@
 export { SalonProfilePage } from "./salon-profile-page";
+export { SalonProfileLoader } from "./salon-profile-loader";
 export { SalonProfileSkeleton } from "./salon-profile-skeleton";
 export { SalonCover } from "./salon-cover";
 export { SalonDetailsHeader } from "./salon-details-header";

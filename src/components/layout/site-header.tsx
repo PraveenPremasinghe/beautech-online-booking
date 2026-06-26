@@ -38,6 +38,12 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+          <Link
+            href={BOOKING_ROUTES.profile()}
+            className="cursor-pointer transition-colors hover:text-foreground"
+          >
+            My appointments
+          </Link>
         </nav>
 
         <Button

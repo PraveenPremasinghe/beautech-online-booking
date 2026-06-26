@@ -8,6 +8,8 @@ import { BookingConfirmedView } from "@/components/booking/booking-confirmed-vie
 import { BookingConfirmedSkeleton } from "@/components/booking/booking-skeletons";
 import { Container } from "@/components/layout/container";
 import { getBookingConfirmation } from "@/lib/api/bookings";
+import { getTenantCancellationPolicy } from "@/lib/tenant-config";
+import { getClientId } from "@/lib/tenant";
 import { BOOKING_ROUTES } from "@/lib/constants";
 import { useBookingStore } from "@/store";
 
@@ -31,8 +33,13 @@ export function ConfirmedClient({ salonSlug, bookingId }: ConfirmedClientProps) 
   });
 
   const { data: fetchedConfirmation, isLoading } = useQuery({
-    queryKey: ["booking-confirmation", salonSlug, bookingId],
-    queryFn: () => getBookingConfirmation(salonSlug, bookingId),
+    queryKey: ["booking-confirmation", salonSlug, bookingId, getClientId()],
+    queryFn: () =>
+      getBookingConfirmation(
+        getClientId() ?? "demo",
+        bookingId,
+        getTenantCancellationPolicy(getClientId() ?? "demo"),
+      ),
     enabled: !storeConfirmation,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
