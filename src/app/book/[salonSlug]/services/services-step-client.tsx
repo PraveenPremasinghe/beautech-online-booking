@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -11,6 +12,8 @@ import {
   getNextStepRoute,
   getPrevStepRoute,
 } from "@/features/booking/routes";
+import { fetchServicesAndCategories } from "@/lib/api/services";
+import { getClientId } from "@/lib/tenant";
 import {
   useBookingNavigation,
   useBookingStore,
@@ -30,12 +33,26 @@ export function ServicesStepClient({ salonSlug }: ServicesStepClientProps) {
   const summary = useBookingSummary();
 
   const branchId = useBookingStore((s) => s.branchId);
-  const services = useBookingStore((s) => s.catalog?.services ?? EMPTY_SERVICES);
-  const categories = useBookingStore((s) => s.catalog?.categories ?? EMPTY_CATEGORIES);
+  const services = useBookingStore((s) => s.services);
+  const categories = useBookingStore((s) => s.categories);
+  const setCatalogServices = useBookingStore((s) => s.setCatalogServices);
+  const setCategories = useBookingStore((s) => s.setCategories);
   const serviceIds = useBookingStore((s) => s.serviceIds);
   const toggleService = useBookingStore((s) => s.toggleService);
 
   const { canProceed, validateCurrentStep } = useBookingNavigation();
+
+  const { isLoading } = useQuery({
+    queryKey: ["services", branchId, getClientId()],
+    queryFn: async () => {
+      const data = await fetchServicesAndCategories(branchId!);
+      setCategories(data.categories);
+      setCatalogServices(data.services);
+      return data;
+    },
+    enabled: Boolean(branchId && getClientId()),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (!branchId) {
@@ -59,7 +76,7 @@ export function ServicesStepClient({ salonSlug }: ServicesStepClientProps) {
     if (nextRoute) router.push(nextRoute);
   }
 
-  if (!branchId) {
+  if (!branchId || isLoading) {
     return <BookingRouteSkeleton />;
   }
 
@@ -73,8 +90,8 @@ export function ServicesStepClient({ salonSlug }: ServicesStepClientProps) {
       continueDisabled={!canProceed() || services.length === 0}
     >
       <ServicesStep
-        services={services}
-        categories={categories}
+        services={services.length > 0 ? services : EMPTY_SERVICES}
+        categories={categories.length > 0 ? categories : EMPTY_CATEGORIES}
         selectedServiceIds={serviceIds}
         onToggleService={toggleService}
       />

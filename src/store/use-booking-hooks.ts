@@ -4,8 +4,6 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
-  selectAvailableProfessionals,
-  selectAvailableTimeSlots,
   selectBookingSummary,
   selectDraft,
   selectHasPartialSummary,
@@ -17,11 +15,14 @@ import {
 } from "./booking-selectors";
 import { useBookingStore } from "./use-booking-store";
 
-/** Full booking summary derived from store + catalog */
 export function useBookingSummary() {
   const summaryDeps = useBookingStore(
     useShallow((state) => ({
-      catalog: state.catalog,
+      salon: state.salon,
+      branches: state.branches,
+      services: state.services,
+      professionals: state.professionals,
+      selectedTimeSlot: state.selectedTimeSlot,
       branchId: state.branchId,
       serviceIds: state.serviceIds,
       professionalId: state.professionalId,
@@ -32,7 +33,11 @@ export function useBookingSummary() {
   );
 
   return useMemo(() => selectBookingSummary(useBookingStore.getState()), [
-    summaryDeps.catalog,
+    summaryDeps.salon,
+    summaryDeps.branches,
+    summaryDeps.services,
+    summaryDeps.professionals,
+    summaryDeps.selectedTimeSlot,
     summaryDeps.branchId,
     summaryDeps.serviceIds,
     summaryDeps.professionalId,
@@ -42,12 +47,10 @@ export function useBookingSummary() {
   ]);
 }
 
-/** Current draft snapshot */
 export function useBookingDraft() {
   return useBookingStore(selectDraft);
 }
 
-/** Resolved selections */
 export function useBookingSelections() {
   return useBookingStore(
     useShallow((state) => ({
@@ -59,17 +62,6 @@ export function useBookingSelections() {
   );
 }
 
-/** Filtered lists for step UIs */
-export function useBookingOptions() {
-  return useBookingStore(
-    useShallow((state) => ({
-      professionals: selectAvailableProfessionals(state),
-      timeSlots: selectAvailableTimeSlots(state),
-    })),
-  );
-}
-
-/** Step navigation + validation */
 export function useBookingNavigation() {
   return useBookingStore(
     useShallow((state) => ({
@@ -83,11 +75,10 @@ export function useBookingNavigation() {
   );
 }
 
-/** Service selection helpers */
 export function useServiceSelection() {
   const serviceIds = useBookingStore((s) => s.serviceIds);
   const toggleService = useBookingStore((s) => s.toggleService);
-  const setServices = useBookingStore((s) => s.setServices);
+  const setServiceIds = useBookingStore((s) => s.setServiceIds);
   const count = useBookingStore(selectServiceCount);
 
   return useMemo(
@@ -95,10 +86,10 @@ export function useServiceSelection() {
       serviceIds,
       count,
       toggleService,
-      setServices,
+      setServices: setServiceIds,
       isSelected: (id: string) => serviceIds.includes(id),
     }),
-    [serviceIds, count, toggleService, setServices],
+    [serviceIds, count, toggleService, setServiceIds],
   );
 }
 

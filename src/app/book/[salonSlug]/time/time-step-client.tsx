@@ -2,13 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { addMinutes } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { BookingShell, BookingRouteSkeleton } from "@/components/booking";
 import { DatetimeStep } from "@/components/booking/steps/datetime-step";
 import { fetchAvailableTimeSlots } from "@/lib/api/time-slots";
+import { calculateTotalDuration } from "@/lib/booking-utils";
 import {
   getDateStripOptions,
   SLOT_HOLD_MINUTES,
@@ -18,6 +19,7 @@ import {
   getNextStepRoute,
   getPrevStepRoute,
 } from "@/features/booking/routes";
+import { getClientId } from "@/lib/tenant";
 import {
   useBookingNavigation,
   useBookingStore,
@@ -33,9 +35,9 @@ export function TimeStepClient({ salonSlug }: TimeStepClientProps) {
   const summary = useBookingSummary();
   const dates = getDateStripOptions();
 
-  const catalog = useBookingStore((s) => s.catalog);
   const branchId = useBookingStore((s) => s.branchId);
   const serviceIds = useBookingStore((s) => s.serviceIds);
+  const services = useBookingStore((s) => s.services);
   const professionalId = useBookingStore((s) => s.professionalId);
   const date = useBookingStore((s) => s.date);
   const timeSlotId = useBookingStore((s) => s.timeSlotId);
@@ -44,6 +46,11 @@ export function TimeStepClient({ salonSlug }: TimeStepClientProps) {
 
   const { canProceed, validateCurrentStep } = useBookingNavigation();
   const [slotHoldExpiresAt, setSlotHoldExpiresAt] = useState<Date | null>(null);
+
+  const timeDurationMinutes = useMemo(() => {
+    const selected = services.filter((s) => serviceIds.includes(s.id));
+    return calculateTotalDuration(selected);
+  }, [services, serviceIds]);
 
   useEffect(() => {
     if (!branchId) {
@@ -68,20 +75,27 @@ export function TimeStepClient({ salonSlug }: TimeStepClientProps) {
   const { data: slots = [], isLoading } = useQuery({
     queryKey: [
       "booking-time-slots",
-      salonSlug,
+      getClientId(),
       branchId,
       date,
       professionalId,
-      serviceIds,
+      timeDurationMinutes,
     ],
     queryFn: () =>
-      fetchAvailableTimeSlots(catalog!, {
+      fetchAvailableTimeSlots({
         branchId: branchId!,
         date: date!,
         professionalId: professionalId!,
-        serviceIds,
+        timeDurationMinutes,
       }),
-    enabled: Boolean(catalog && branchId && date && professionalId),
+    enabled: Boolean(
+      getClientId() &&
+        branchId &&
+        date &&
+        professionalId &&
+        professionalId !== "any" &&
+        timeDurationMinutes > 0,
+    ),
     staleTime: 30_000,
   });
 
@@ -109,8 +123,11 @@ export function TimeStepClient({ salonSlug }: TimeStepClientProps) {
   }
 
   function handleSelectSlot(slotId: string) {
-    setTimeSlot(slotId);
-    setSlotHoldExpiresAt(addMinutes(new Date(), SLOT_HOLD_MINUTES));
+    const slot = slots.find((item) => item.id === slotId);
+    if (slot) {
+      setTimeSlot(slot);
+      setSlotHoldExpiresAt(addMinutes(new Date(), SLOT_HOLD_MINUTES));
+    }
   }
 
   function handleBack() {

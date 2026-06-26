@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { getBookingCatalogBySlug } from "@/lib/mock-booking-data";
+import { getClientId, initClientIdFromSearchParams } from "@/lib/tenant";
 import type { BookingStep } from "@/types/booking";
 import { parseInitOptionsFromSearchParams, useBookingStore } from "@/store";
 
@@ -30,8 +30,9 @@ export function BookingInit({ salonSlug }: BookingInitProps) {
   const step = SEGMENT_TO_STEP[segment] ?? "branch";
 
   useEffect(() => {
-    const catalog = getBookingCatalogBySlug(salonSlug);
-    if (!catalog) return;
+    initClientIdFromSearchParams(searchParams);
+    const clientId = getClientId();
+    if (!clientId) return;
 
     const options = parseInitOptionsFromSearchParams(
       new URLSearchParams(searchParamsKey),
@@ -39,15 +40,15 @@ export function BookingInit({ salonSlug }: BookingInitProps) {
 
     const state = useBookingStore.getState();
 
-    if (!state.catalog || state.salonSlug !== salonSlug) {
-      state.initBooking(salonSlug, catalog, { ...options, step });
+    if (!state.salon || state.salonSlug !== salonSlug) {
+      state.initBooking(salonSlug, clientId, { ...options, step });
       return;
     }
 
     if (state.currentStep !== step) {
       state.setStep(step);
     }
-  }, [salonSlug, step, searchParamsKey]);
+  }, [salonSlug, step, searchParams, searchParamsKey]);
 
   return null;
 }

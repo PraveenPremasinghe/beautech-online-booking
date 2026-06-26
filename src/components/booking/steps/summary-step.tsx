@@ -142,15 +142,17 @@ export function SummaryStep({
 
       <SummarySection title="Your details" editHref={detailsRoute}>
         <div className="space-y-2">
-          <p className="font-medium">{formatClientName(clientDetails)}</p>
+          {clientDetails.firstName ? (
+            <p className="font-medium">{formatClientName(clientDetails)}</p>
+          ) : null}
           <p className="flex items-center gap-2 text-muted-foreground">
-            <PhoneIcon className="size-4 shrink-0" aria-hidden />
-            {clientDetails.phone}
+            <EnvelopeIcon className="size-4 shrink-0" aria-hidden />
+            {clientDetails.email}
           </p>
-          {clientDetails.email ? (
+          {clientDetails.phone ? (
             <p className="flex items-center gap-2 text-muted-foreground">
-              <EnvelopeIcon className="size-4 shrink-0" aria-hidden />
-              {clientDetails.email}
+              <PhoneIcon className="size-4 shrink-0" aria-hidden />
+              {clientDetails.phone}
             </p>
           ) : null}
           {clientDetails.notes ? (

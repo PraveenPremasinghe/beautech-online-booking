@@ -10,6 +10,7 @@ export interface BookingValidationState {
   date: string | null;
   timeSlotId: string | null;
   clientDetails: ClientDetails | null;
+  customerId: number | null;
 }
 
 export interface StepValidationResult {
@@ -48,7 +49,7 @@ export function validateBookingStep(
 
     case "details": {
       if (!state.clientDetails) {
-        return { valid: false, errors: ["Complete your contact details"] };
+        return { valid: false, errors: ["Sign in to continue"] };
       }
       const parsed = clientDetailsSchema.safeParse(state.clientDetails);
       if (!parsed.success) {
@@ -73,6 +74,9 @@ export function validateBookingStep(
         ...datetime.errors,
         ...details.errors,
       ];
+      if (!state.customerId) {
+        errors.push("Sign in to confirm your booking");
+      }
       return { valid: errors.length === 0, errors };
     }
 

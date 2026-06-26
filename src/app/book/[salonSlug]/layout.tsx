@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import { BookingInit } from "@/components/booking/booking-init";
+import { TenantGuard } from "@/components/auth/tenant-guard";
 
 interface BookSalonLayoutProps {
   children: React.ReactNode;
@@ -18,7 +19,9 @@ export default async function BookSalonLayout({
       <Suspense fallback={null}>
         <BookingInit salonSlug={salonSlug} />
       </Suspense>
-      {children}
+      <Suspense fallback={null}>
+        <TenantGuard>{children}</TenantGuard>
+      </Suspense>
     </main>
   );
 }

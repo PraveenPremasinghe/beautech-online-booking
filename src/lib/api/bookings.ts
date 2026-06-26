@@ -1,72 +1,104 @@
+import { fetchApi } from "@/lib/api-client";
+import { mapApiAppointmentToConfirmation } from "@/lib/mappers/appointment-mapper";
+import {
+  clientDetailsToCustomerDto,
+  transformAppointmentData,
+} from "@/lib/transform-appointment";
+import { getTenantCancellationPolicy } from "@/lib/tenant-config";
+import { getClientId } from "@/lib/tenant";
+import type {
+  ApiOnlineAppointment,
+  CreateAppointmentResponse,
+} from "@/types/api";
 import type {
   AppointmentConfirmation,
   BookingDraft,
   BookingSummary,
+  Branch,
+  ClientDetails,
+  Professional,
+  Service,
 } from "@/types/booking";
-
-const CONFIRM_DELAY_MS = 1_200;
-const LOOKUP_DELAY_MS = 250;
-
-/** In-memory mock store — persists for the dev server session */
-const mockBookingStore = new Map<string, AppointmentConfirmation>();
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function generateConfirmationCode(): string {
-  const segment = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `BT-${segment}`;
-}
 
 export interface ConfirmBookingParams {
   draft: BookingDraft;
   summary: BookingSummary;
-  cancellationPolicy: string;
+  branch: Branch;
+  services: Service[];
+  professional: Professional;
+  startTime: string;
+  customerId: number;
+  clientDetails: ClientDetails;
+  cancellationPolicy?: string;
 }
 
-export async function confirmBooking({
-  draft,
-  summary,
-  cancellationPolicy,
-}: ConfirmBookingParams): Promise<AppointmentConfirmation> {
-  if (!draft.clientDetails) {
-    throw new Error("Client details are required to confirm a booking");
+function extractAppointmentId(response: CreateAppointmentResponse): string {
+  if (response.id != null) return String(response.id);
+  if (response.data?.id != null) return String(response.data.id);
+  throw new Error("Appointment created but no id returned");
+}
+
+export async function confirmBooking(
+  params: ConfirmBookingParams,
+): Promise<AppointmentConfirmation> {
+  const clientId = getClientId() ?? "demo";
+  const cancellationPolicy =
+    params.cancellationPolicy ?? getTenantCancellationPolicy(clientId);
+
+  if (!params.draft.date) {
+    throw new Error("Appointment date is required");
   }
 
-  await delay(CONFIRM_DELAY_MS);
+  const customer = clientDetailsToCustomerDto(
+    params.clientDetails,
+    params.customerId,
+  );
 
-  const confirmation: AppointmentConfirmation = {
-    appointmentId: `appt-${Date.now()}`,
-    confirmationCode: generateConfirmationCode(),
-    status: "confirmed",
-    summary,
-    client: draft.clientDetails,
-    bookedAt: new Date().toISOString(),
+  const requestBody = transformAppointmentData({
+    branch: params.branch,
+    services: params.services,
+    professional: params.professional,
+    date: params.draft.date,
+    startTime: params.startTime,
+    customerId: params.customerId,
+    customer,
+  });
+
+  const createResponse = await fetchApi<CreateAppointmentResponse>(
+    "/appointments",
+    {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+    },
+  );
+
+  const appointmentId = extractAppointmentId(createResponse);
+  const confirmation = await getBookingConfirmation(
+    clientId,
+    appointmentId,
     cancellationPolicy,
-  };
-
-  mockBookingStore.set(confirmation.appointmentId, confirmation);
+  );
+  if (!confirmation) {
+    throw new Error("Appointment created but confirmation could not be loaded");
+  }
   return confirmation;
 }
 
 export async function getBookingConfirmation(
-  salonSlug: string,
+  clientId: string,
   bookingId: string,
+  cancellationPolicy?: string,
 ): Promise<AppointmentConfirmation | null> {
-  await delay(LOOKUP_DELAY_MS);
-
-  const booking = mockBookingStore.get(bookingId);
-  if (!booking || booking.summary.salon.slug !== salonSlug) {
+  try {
+    const apiAppointment = await fetchApi<ApiOnlineAppointment>(
+      `/appointments/online/${encodeURIComponent(bookingId)}`,
+    );
+    return mapApiAppointmentToConfirmation(
+      apiAppointment,
+      clientId,
+      cancellationPolicy ?? getTenantCancellationPolicy(clientId),
+    );
+  } catch {
     return null;
   }
-
-  return booking;
-}
-
-/** @internal Test / seed helper */
-export function registerMockBooking(confirmation: AppointmentConfirmation): void {
-  mockBookingStore.set(confirmation.appointmentId, confirmation);
 }

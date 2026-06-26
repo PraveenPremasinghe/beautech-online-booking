@@ -3,20 +3,25 @@ import { z } from "zod";
 
 export const CLIENT_NOTES_MAX_LENGTH = 500;
 
+export const bookingEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .email("Enter a valid email"),
+});
+
+export type BookingEmailFormValues = z.infer<typeof bookingEmailSchema>;
+
 export const clientDetailsSchema = z.object({
-  firstName: z
-    .string()
-    .trim()
-    .min(1, "First name is required")
-    .max(50, "First name is too long"),
+  firstName: z.string().trim().max(50, "First name is too long"),
   lastName: z.string().trim().max(50, "Last name is too long"),
-  email: z.union([z.literal(""), z.string().email("Enter a valid email")]),
-  phone: z
+  email: z
     .string()
     .trim()
-    .min(1, "Mobile number is required")
-    .min(8, "Enter a valid mobile number")
-    .max(20, "Mobile number is too long"),
+    .min(1, "Email is required")
+    .email("Enter a valid email"),
+  phone: z.string().trim().max(20, "Mobile number is too long"),
   notes: z
     .string()
     .max(
@@ -37,6 +42,20 @@ export const clientDetailsDefaultValues: ClientDetailsFormValues = {
   notes: "",
   marketingOptIn: false,
 };
+
+export function clientDetailsFromEmail(email: string): ClientDetails {
+  const trimmed = email.trim();
+  const localPart = trimmed.split("@")[0] ?? "Guest";
+  const firstName =
+    localPart.charAt(0).toUpperCase() + localPart.slice(1).replace(/[._-]/g, " ");
+
+  return {
+    firstName,
+    lastName: "",
+    email: trimmed,
+    phone: "",
+  };
+}
 
 export function toClientDetails(values: ClientDetailsFormValues): ClientDetails {
   const notes = values.notes?.trim();

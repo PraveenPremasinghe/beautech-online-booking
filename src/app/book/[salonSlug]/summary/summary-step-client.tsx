@@ -7,13 +7,20 @@ import { toast } from "sonner";
 import { BookingShell, BookingRouteSkeleton } from "@/components/booking";
 import { SummaryStep } from "@/components/booking/steps/summary-step";
 import { confirmBooking } from "@/lib/api/bookings";
+import { loginWithGoogle } from "@/lib/booking-auth";
+import { saveBookingDraft } from "@/lib/booking-state";
 import { BOOKING_ROUTES } from "@/lib/constants";
+import { getTenantCancellationPolicy } from "@/lib/tenant-config";
+import { getClientId } from "@/lib/tenant";
 import {
   getBookingStepRoute,
   getPrevStepRoute,
 } from "@/features/booking/routes";
 import {
   selectDraft,
+  selectSelectedBranch,
+  selectSelectedProfessional,
+  selectSelectedServices,
   selectValidationState,
   useBookingStore,
   useBookingSummary,
@@ -29,13 +36,15 @@ export function SummaryStepClient({ salonSlug }: SummaryStepClientProps) {
   const summary = useBookingSummary();
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const catalog = useBookingStore((s) => s.catalog);
+  const salon = useBookingStore((s) => s.salon);
   const branchId = useBookingStore((s) => s.branchId);
   const serviceIds = useBookingStore((s) => s.serviceIds);
   const professionalId = useBookingStore((s) => s.professionalId);
   const date = useBookingStore((s) => s.date);
   const timeSlotId = useBookingStore((s) => s.timeSlotId);
   const clientDetails = useBookingStore((s) => s.clientDetails);
+  const customerId = useBookingStore((s) => s.customerId);
+  const selectedTimeSlot = useBookingStore((s) => s.selectedTimeSlot);
   const setConfirmation = useBookingStore((s) => s.setConfirmation);
 
   useEffect(() => {
@@ -75,17 +84,41 @@ export function SummaryStepClient({ salonSlug }: SummaryStepClientProps) {
   }
 
   async function handleConfirm() {
+    const state = useBookingStore.getState();
     const validation = validateBookingStep(
       "summary",
-      selectValidationState(useBookingStore.getState()),
+      selectValidationState(state),
     );
     if (!validation.valid) {
+      if (!state.customerId) {
+        saveBookingDraft({ returnTo: "summary", tenant: getClientId() ?? undefined });
+        try {
+          await loginWithGoogle(getClientId() ?? undefined);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Sign in required");
+        }
+        return;
+      }
       toast.error(validation.errors[0] ?? "Complete all booking steps first");
       return;
     }
 
-    const draft = selectDraft(useBookingStore.getState());
-    if (!draft || !summary || !catalog || !clientDetails) {
+    const draft = selectDraft(state);
+    const branch = selectSelectedBranch(state);
+    const services = selectSelectedServices(state);
+    const professional = selectSelectedProfessional(state);
+    const slot = state.selectedTimeSlot;
+
+    if (
+      !draft ||
+      !summary ||
+      !salon ||
+      !branch ||
+      !clientDetails ||
+      !professional ||
+      !slot ||
+      !customerId
+    ) {
       toast.error("Unable to confirm booking. Please try again.");
       return;
     }
@@ -93,22 +126,31 @@ export function SummaryStepClient({ salonSlug }: SummaryStepClientProps) {
     setIsConfirming(true);
 
     try {
+      const clientId = getClientId() ?? "demo";
       const confirmation = await confirmBooking({
         draft,
         summary,
-        cancellationPolicy: catalog.salon.cancellationPolicy,
+        branch,
+        services,
+        professional,
+        startTime: slot.startTime,
+        customerId,
+        clientDetails,
+        cancellationPolicy: getTenantCancellationPolicy(clientId),
       });
 
       setConfirmation(confirmation);
       router.push(BOOKING_ROUTES.confirmed(salonSlug, confirmation.appointmentId));
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      );
       setIsConfirming(false);
     }
   }
 
   if (
-    !catalog ||
+    !salon ||
     !branchId ||
     serviceIds.length === 0 ||
     !professionalId ||
@@ -119,6 +161,8 @@ export function SummaryStepClient({ salonSlug }: SummaryStepClientProps) {
   ) {
     return <BookingRouteSkeleton />;
   }
+
+  const clientId = getClientId() ?? "demo";
 
   return (
     <BookingShell
@@ -133,12 +177,12 @@ export function SummaryStepClient({ salonSlug }: SummaryStepClientProps) {
     >
       <SummaryStep
         salon={{
-          name: catalog.salon.name,
-          tagline: catalog.salon.tagline,
+          name: salon.name,
+          tagline: salon.tagline,
         }}
         summary={summary}
         clientDetails={clientDetails}
-        cancellationPolicy={catalog.salon.cancellationPolicy}
+        cancellationPolicy={getTenantCancellationPolicy(clientId)}
         salonSlug={salonSlug}
       />
     </BookingShell>
